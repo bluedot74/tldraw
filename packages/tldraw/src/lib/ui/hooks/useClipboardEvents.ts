@@ -348,12 +348,16 @@ async function handleClipboardThings(editor: Editor, things: ClipboardThing[], p
 
 						thing.source.then((text) => {
 							// first, see if we can find tldraw content, which is JSON inside of an html comment
-							const tldrawHtmlComment = text.match(/<div data-tldraw[^>]*>(.*)<\/div>/)?.[1]
+							const match = text.match(/<div data-tldraw(-plain)?[^>]*>(.*)<\/div>/)
+							const tldrawHtmlComment = match?.[2]
+							const isPlain = match?.[1] === '-plain'
 
 							if (tldrawHtmlComment) {
 								try {
 									// If we've found tldraw content in the html string, use that as JSON
-									const jsonComment = lz.decompressFromBase64(tldrawHtmlComment)
+									const jsonComment = isPlain
+										? tldrawHtmlComment
+										: lz.decompressFromBase64(tldrawHtmlComment)
 									if (jsonComment === null) {
 										r({
 											type: 'error',
@@ -560,13 +564,11 @@ const handleNativeOrMenuCopy = async (editor: Editor) => {
 		return
 	}
 
-	const stringifiedClipboard = lz.compressToBase64(
-		JSON.stringify({
-			type: 'application/tldraw',
-			kind: 'content',
-			data: content,
-		})
-	)
+	const stringifiedClipboard = JSON.stringify({
+		type: 'application/tldraw',
+		kind: 'content',
+		data: content,
+	})
 
 	if (typeof navigator === 'undefined') {
 		return
@@ -580,7 +582,7 @@ const handleNativeOrMenuCopy = async (editor: Editor) => {
 			.filter(isDefined)
 
 		if (navigator.clipboard?.write) {
-			const htmlBlob = new Blob([`<div data-tldraw>${stringifiedClipboard}</div>`], {
+			const htmlBlob = new Blob([`<div data-tldraw-plain>${stringifiedClipboard}</div>`], {
 				type: 'text/html',
 			})
 
@@ -601,7 +603,7 @@ const handleNativeOrMenuCopy = async (editor: Editor) => {
 				}),
 			])
 		} else if (navigator.clipboard.writeText) {
-			navigator.clipboard.writeText(`<div data-tldraw>${stringifiedClipboard}</div>`)
+			navigator.clipboard.writeText(`<div data-tldraw-plain>${stringifiedClipboard}</div>`)
 		}
 	}
 }
